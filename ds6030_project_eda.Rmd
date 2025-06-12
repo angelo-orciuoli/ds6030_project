@@ -1,0 +1,113 @@
+---
+title: "DS6030 Project Part 1: Exploratory Data Analysis"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(discrim)
+library(dplyr) 
+library(yardstick)
+library(patchwork)
+```
+
+
+```{r}
+train_data <- read.csv("train/HaitiPixels.csv")
+head(train_data)
+```
+
+<span style="font-size: 20px;"><strong>Variable Definitions</strong></span>
+
+<div style="font-size: 14px;">
+
+**Class:** A categorical variable representing the true label for each data point (i.e., what is seen in the aerial image).
+
+• "Vegetation" – likely areas with trees, grass, or plants  
+• "Soil" – likely bare earth or dirt  
+• "Rooftop" – man-made structures such as buildings  
+• "Various Non-Tarp" – miscellaneous surfaces not relevant to identifying displaced persons  
+• "Blue Tarp" – the positive class we're trying to detect. These blue tarps likely indicate makeshift shelters created by displaced persons  
+
+**Red, Green, Blue:** Numeric variables ranging from 0 to 255, representing the intensity of each color channel (RGB) in an image.
+
+• 0 represents no intensity (dark) and 255 represents full intensity (pure color)  
+• Example: Red = 48, Green = 50, Blue = 230 would appear predominantly blue, possibly indicating a blue tarp  
+• Example: Red = 180, Green = 160, Blue = 90 would appear brownish, potentially representing soil or rooftop  
+
+</div>
+
+```{r}
+#| fig.width: 9
+#| fig.height: 8
+# Summarize the data
+class_summary <- train_data %>%
+  count(Class) %>%
+  mutate(
+    Percentage = round(100 * n / sum(n), 1),
+    FillColor = ifelse(Class == "Blue Tarp", "blue", "#384860")
+  )
+
+# Plot with count + percent labels
+ggplot(class_summary, aes(x = Class, y = n, fill = FillColor)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(n, " (", Percentage, "%)")), vjust = -0.5) +
+  scale_fill_identity() +  # Uses the exact hex colors provided
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12)) + 
+  labs(title = "Class Distribution", y = "Count", x = NULL)
+```
+
+
+```{r}
+#| fig.width: 12
+#| fig.height: 10
+# Red
+red_bxplt <- ggplot(train_data, aes(x = Class, y = Red)) +
+  geom_boxplot(fill = "red") +
+  labs(title = "Red Channel Intensity by Class", x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
+
+# Green
+green_bxplt <- ggplot(train_data, aes(x = Class, y = Green)) +
+  geom_boxplot(fill = "green") +
+  labs(title = "Green Channel Intensity by Class", x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
+
+# Blue
+blue_bxplt <- ggplot(train_data, aes(x = Class, y = Blue)) +
+  geom_boxplot(fill = "steelblue") +
+  labs(title = "Blue Channel Intensity by Class", x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
+
+red_bxplt + green_bxplt + blue_bxplt
+```
+
+```{r}
+# Create the summary table of medians
+median_table <- train_data %>%
+  group_by(Class) %>%
+  summarise(
+    Red = median(Red),
+    Green = median(Green),
+    Blue = median(Blue)
+  ) %>%
+  pivot_longer(cols = c(Red, Green, Blue), names_to = "Color", values_to = "Median") %>%
+  pivot_wider(names_from = Class, values_from = Median)
+
+# Display table
+kable(median_table, caption = "Median RGB Intensities by Class") %>%
+  kable_styling(full_width = FALSE, position = "center")
+```
+
+
+
+
