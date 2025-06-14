@@ -83,7 +83,7 @@ green_bxplt <- ggplot(train_data, aes(x = Class, y = Green)) +
 
 # Blue
 blue_bxplt <- ggplot(train_data, aes(x = Class, y = Blue)) +
-  geom_boxplot(fill = "steelblue") +
+  geom_boxplot(fill = "blue") +
   labs(title = "Blue Channel Intensity by Class", x = NULL, y = NULL) +
   theme_minimal() +
   theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
@@ -109,5 +109,48 @@ kable(median_table, caption = "Median RGB Intensities by Class") %>%
 ```
 
 
+```{r}
+rgb_dist <- function(data, class_name) {
+  class_data <- data %>% filter(Class == class_name)
 
+  # Get max y-count across all three color channels
+  max_y <- max(
+    hist(class_data$Red, breaks = seq(0, 255, by = 5), plot = FALSE)$counts,
+    hist(class_data$Green, breaks = seq(0, 255, by = 5), plot = FALSE)$counts,
+    hist(class_data$Blue, breaks = seq(0, 255, by = 5), plot = FALSE)$counts
+  )
+
+  g1 <- ggplot(class_data, aes(x = Red)) +
+    geom_area(stat = "bin", binwidth = 6, fill = "red", alpha = 1) +
+    theme_minimal() +
+    labs(x = "Red Channel Intensity", y = "Image Count") +
+    coord_cartesian(ylim = c(0, max_y))
+
+  g2 <- ggplot(class_data, aes(x = Green)) +
+    geom_area(stat = "bin", binwidth = 6, fill = "green", alpha = 1) +
+    theme_minimal() +
+    labs(x = "Green Channel Intensity", y = "Image Count") +
+    coord_cartesian(ylim = c(0, max_y))
+
+  g3 <- ggplot(class_data, aes(x = Blue)) +
+    geom_area(stat = "bin", binwidth = 6, fill = "blue", alpha = 1) +
+    theme_minimal() +
+    labs(x = "Blue Channel Intensity", y = "Image Count") +
+    coord_cartesian(ylim = c(0, max_y))
+
+  (g1 + g2 + g3) +
+    plot_annotation(title = paste("Color Breakdown of", class_name, "Images")) &
+    theme(plot.title = element_text(size = 20, hjust = 0.5))
+}
+```
+
+```{r}
+#| fig.width: 10
+#| fig.height: 6
+rgb_dist(train_data, "Blue Tarp")
+rgb_dist(train_data, "Vegetation")
+rgb_dist(train_data, "Rooftop")
+rgb_dist(train_data, "Various Non-Tarp")
+rgb_dist(train_data, "Soil")
+```
 
