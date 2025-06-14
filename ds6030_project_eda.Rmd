@@ -43,9 +43,9 @@ head(train_data)
 </div>
 
 ```{r}
-#| fig.width: 9
-#| fig.height: 8
-# Summarize the data
+#| fig.width: 10
+#| fig.height: 6
+# Number and proportion of images in each class
 class_summary <- train_data %>%
   count(Class) %>%
   mutate(
@@ -53,11 +53,10 @@ class_summary <- train_data %>%
     FillColor = ifelse(Class == "Blue Tarp", "blue", "#384860")
   )
 
-# Plot with count + percent labels
 ggplot(class_summary, aes(x = Class, y = n, fill = FillColor)) +
   geom_bar(stat = "identity") +
   geom_text(aes(label = paste0(n, " (", Percentage, "%)")), vjust = -0.5) +
-  scale_fill_identity() +  # Uses the exact hex colors provided
+  scale_fill_identity() + 
   theme_minimal() +
   theme(axis.text.x = element_text(size = 12)) + 
   labs(title = "Class Distribution", y = "Count", x = NULL)
@@ -65,23 +64,21 @@ ggplot(class_summary, aes(x = Class, y = n, fill = FillColor)) +
 
 
 ```{r}
-#| fig.width: 12
-#| fig.height: 10
-# Red
+#| fig.width: 10
+#| fig.height: 6
+# Boxplots
 red_bxplt <- ggplot(train_data, aes(x = Class, y = Red)) +
   geom_boxplot(fill = "red") +
   labs(title = "Red Channel Intensity by Class", x = NULL, y = NULL) +
   theme_minimal() +
   theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
 
-# Green
 green_bxplt <- ggplot(train_data, aes(x = Class, y = Green)) +
   geom_boxplot(fill = "green") +
   labs(title = "Green Channel Intensity by Class", x = NULL, y = NULL) +
   theme_minimal() +
   theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1))
 
-# Blue
 blue_bxplt <- ggplot(train_data, aes(x = Class, y = Blue)) +
   geom_boxplot(fill = "blue") +
   labs(title = "Blue Channel Intensity by Class", x = NULL, y = NULL) +
@@ -92,54 +89,64 @@ red_bxplt + green_bxplt + blue_bxplt
 ```
 
 ```{r}
-# Create the summary table of medians
+# Medians
 median_table <- train_data %>%
   group_by(Class) %>%
   summarise(
-    Red = median(Red),
-    Green = median(Green),
-    Blue = median(Blue)
+    red = median(Red),
+    green = median(Green),
+    blue = median(Blue)
   ) %>%
-  pivot_longer(cols = c(Red, Green, Blue), names_to = "Color", values_to = "Median") %>%
+  pivot_longer(cols = c(red, green, blue), names_to = "Color", values_to = "Median") %>%
   pivot_wider(names_from = Class, values_from = Median)
 
-# Display table
 kable(median_table, caption = "Median RGB Intensities by Class") %>%
-  kable_styling(full_width = FALSE, position = "center")
+kable_styling(full_width = FALSE, position = "center")
+```
+
+```{r}
+# Each cell shows the count of the most frequent color intensity value
+# (i.e., the peak height of the color distribution) for each class
+
+max_counts <- sapply(c("Red", "Green", "Blue"), function(color) {
+  sapply(unique(train_data$Class), function(cls) {
+    max(hist(train_data[[color]][train_data$Class == cls],
+             breaks = seq(0, 255, by = 5), plot = FALSE)$counts)
+  })
+})
+
+kable(data.frame(t(max_counts)), caption = "Count at Peak Intensity") %>%
+kable_styling(full_width = FALSE, position = "center")
 ```
 
 
 ```{r}
+# Distributions
 rgb_dist <- function(data, class_name) {
+  
   class_data <- data %>% filter(Class == class_name)
-
-  # Get max y-count across all three color channels
-  max_y <- max(
-    hist(class_data$Red, breaks = seq(0, 255, by = 5), plot = FALSE)$counts,
-    hist(class_data$Green, breaks = seq(0, 255, by = 5), plot = FALSE)$counts,
-    hist(class_data$Blue, breaks = seq(0, 255, by = 5), plot = FALSE)$counts
-  )
-
-  g1 <- ggplot(class_data, aes(x = Red)) +
+  max_y <- max(max_counts[class_name, ]) # Ensure alignment of axes
+  
+  red_dist <- ggplot(class_data, aes(x = Red)) +
     geom_area(stat = "bin", binwidth = 6, fill = "red", alpha = 1) +
     theme_minimal() +
     labs(x = "Red Channel Intensity", y = "Image Count") +
     coord_cartesian(ylim = c(0, max_y))
 
-  g2 <- ggplot(class_data, aes(x = Green)) +
+  green_dist <- ggplot(class_data, aes(x = Green)) +
     geom_area(stat = "bin", binwidth = 6, fill = "green", alpha = 1) +
     theme_minimal() +
     labs(x = "Green Channel Intensity", y = "Image Count") +
     coord_cartesian(ylim = c(0, max_y))
 
-  g3 <- ggplot(class_data, aes(x = Blue)) +
+  blue_dist <- ggplot(class_data, aes(x = Blue)) +
     geom_area(stat = "bin", binwidth = 6, fill = "blue", alpha = 1) +
     theme_minimal() +
     labs(x = "Blue Channel Intensity", y = "Image Count") +
     coord_cartesian(ylim = c(0, max_y))
 
-  (g1 + g2 + g3) +
-    plot_annotation(title = paste("Color Breakdown of", class_name, "Images")) &
+  (red_dist + green_dist + blue_dist) +
+    plot_annotation(title = paste("Color Breakdown of", class_name, "Images")) +
     theme(plot.title = element_text(size = 20, hjust = 0.5))
 }
 ```
@@ -153,4 +160,5 @@ rgb_dist(train_data, "Rooftop")
 rgb_dist(train_data, "Various Non-Tarp")
 rgb_dist(train_data, "Soil")
 ```
+
 
