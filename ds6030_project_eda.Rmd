@@ -22,7 +22,7 @@ train_data <- read.csv("train/HaitiPixels.csv")
 head(train_data)
 ```
 
-<span style="font-size: 20px;"><strong>Variable Definitions</strong></span>
+<span style="font-size: 20px;"><strong>Original Variable Definitions</strong></span>
 
 <div style="font-size: 14px;">
 
@@ -43,8 +43,33 @@ head(train_data)
 </div>
 
 ```{r}
+# Feature Engineering: color ratios
+train_data <- train_data %>%
+  mutate(
+    Blue_Red_Ratio = Blue / Red,
+    Blue_Green_Ratio = Blue / Green,
+    Green_Red_Ratio = Green / Red,
+    Blue_Dominance = Blue / (Red + Green + Blue),  # Blue's share of total color
+    Color_Purity = pmax(Red, Green, Blue) / (Red + Green + Blue), # How pure is the dominant color
+    Brightness = Red + Green + Blue
+  )
+head(train_data)
+```
+
+**New Variables**
+
+- **Blue_Red_Ratio: Measures how much blue dominates over red. If value > 1, then blue is stronger than red; if < 1, then red dominates**
+- **Blue_Green_Ratio: Measures blue dominance over green. If value > 1, then blue is stronger than green; if < 1, then green dominates**
+- **Green_Red_Ratio: Measures green dominance over red. If value > 1, then green is stronger than red; if < 1, then red dominates**
+- **Blue_Dominance: Blue's share of total color**
+- **Color_Purity: The dominant color's share of the total color**
+- **Brightness: Total illumination level across all color channels (Red + Green + Blue); higher values indicate brighter/lighter pixels while lower values indicate darker pixels, regardless of color**
+
+Reason: These variables allow us to explore how the relationships of the colors correlate to the classes instead of exploring colors independently of each other.
+
+```{r}
 #| fig.width: 10
-#| fig.height: 6
+#| fig.height: 5
 # Number and proportion of images in each class
 class_summary <- train_data %>%
   count(Class) %>%
@@ -65,7 +90,7 @@ ggplot(class_summary, aes(x = Class, y = n, fill = FillColor)) +
 
 
 ```{r}
-#| fig.width: 10
+#| fig.width: 12
 #| fig.height: 6
 # Boxplots
 red_bxplt <- ggplot(train_data, aes(x = Class, y = Red)) +
@@ -105,8 +130,10 @@ kable(median_table, caption = "Median RGB Intensities by Class") %>%
 kable_styling(full_width = FALSE, position = "center")
 ```
 
+This chart below might not be necessary. Maybe something that could just be in the report.
+
 ```{r}
-# Each cell shows the count of the most frequent color intensity value
+# Function to find the count of the most frequent color intensity value
 # (i.e., the peak height of the color distribution) for each class
 
 max_counts <- sapply(c("Red", "Green", "Blue"), function(color) {
@@ -116,12 +143,6 @@ max_counts <- sapply(c("Red", "Green", "Blue"), function(color) {
   })
 })
 
-kable(data.frame(t(max_counts)), caption = "Count at Peak Intensity") %>%
-kable_styling(full_width = FALSE, position = "center")
-```
-
-
-```{r}
 # Distributions
 rgb_dist <- function(data, class_name) {
   
@@ -132,19 +153,19 @@ rgb_dist <- function(data, class_name) {
     geom_area(stat = "bin", binwidth = 6, fill = "red", alpha = 1) +
     theme_minimal() +
     labs(x = "Red Channel Intensity", y = "Image Count") +
-    coord_cartesian(ylim = c(0, max_y))
+    coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
 
   green_dist <- ggplot(class_data, aes(x = Green)) +
     geom_area(stat = "bin", binwidth = 6, fill = "green", alpha = 1) +
     theme_minimal() +
     labs(x = "Green Channel Intensity", y = "Image Count") +
-    coord_cartesian(ylim = c(0, max_y))
+    coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
 
   blue_dist <- ggplot(class_data, aes(x = Blue)) +
     geom_area(stat = "bin", binwidth = 6, fill = "blue", alpha = 1) +
     theme_minimal() +
     labs(x = "Blue Channel Intensity", y = "Image Count") +
-    coord_cartesian(ylim = c(0, max_y))
+    coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
 
   (red_dist + green_dist + blue_dist) +
     plot_annotation(title = paste("Color Breakdown of", class_name, "Images")) +
@@ -153,14 +174,50 @@ rgb_dist <- function(data, class_name) {
 ```
 
 ```{r}
-#| fig.width: 10
-#| fig.height: 6
+#| fig.width: 11
+#| fig.height: 5
 rgb_dist(train_data, "Blue Tarp")
 rgb_dist(train_data, "Vegetation")
 rgb_dist(train_data, "Rooftop")
 rgb_dist(train_data, "Various Non-Tarp")
 rgb_dist(train_data, "Soil")
 ```
+
+```{r}
+# Calculate blue tarp statistics for decision boundaries
+blue_tarp_stats <- train_data %>%
+  filter(Class == "Blue Tarp") %>%
+  summarise(
+    mean_br = mean(Blue_Red_Ratio), # Average Blue/Red ratio across blue tarp images
+    mean_bg = mean(Blue_Green_Ratio), # Average Blue/Green ratio across blue tarp images
+    q25_br = quantile(Blue_Red_Ratio, 0.25), # Bottom quartile of Blue/Red Ratio
+    q25_bg = quantile(Blue_Green_Ratio, 0.25) # Bottom quartile of Blue/Green Ratio
+  )
+
+# Blue/Red vs Blue/Green Ratio Scatter Plot
+color_ratio <- ggplot(train_data, aes(x = Blue_Red_Ratio, y = Blue_Green_Ratio)) +
+  geom_point(aes(color = Class), alpha = 0.6, size = 0.8) +
+  # Add potential decision boundaries
+  geom_vline(xintercept = blue_tarp_stats$q25_br, linetype = "dashed", color = "red", alpha = 0.7) +
+  geom_hline(yintercept = blue_tarp_stats$q25_bg, linetype = "dashed", color = "red", alpha = 0.7) +
+  scale_color_manual(values = c("Blue Tarp" = "blue", 
+                               "Vegetation" = "green", 
+                               "Soil" = "brown", 
+                               "Rooftop" = "black", 
+                               "Various Non-Tarp" = "orange")) +
+  theme_minimal() +
+  labs(title = "Potential Blue Tarp Decision Boundaries",
+       subtitle = "Dashed lines show 25th percentile thresholds for blue tarps",
+       x = "Blue/Red Ratio", 
+       y = "Blue/Green Ratio") +
+  theme(legend.position = "right",
+        legend.title = element_blank())
+
+color_ratio +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+```
+- **75% of blue tarp images have a Blue/Red ratio greater than 1.094237 (to the right of the vertical dashed line)**
+- **75% of blue tarp images have a Blue/Green ration greater than 1.025158 (above the horizontal dashed line)**
 
 
 > Page break. Above is training data. Below is holdout data.
@@ -207,7 +264,7 @@ holdout078_nonblue <- read.delim("holdout/orthovnir078_ROI_NON_Blue_Tarps.txt",
 ```
 
 ```{r}
-# Should be 3,991,823 and not 979,728. Missing almost 2 million rows
-tail(holdout057_nonblue)
+# Should be 3,991,823 and not 979,728. Missing almost 2 million rows. Right? Idk.
+tail(holdout078_nonblue)
 ```
 
