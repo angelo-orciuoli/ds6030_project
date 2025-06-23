@@ -16,6 +16,8 @@ library(yardstick)
 library(patchwork)
 ```
 
+# Part 1: Training Data Pre-processing
+## Step 1: Load training data and define variables
 
 ```{r}
 train_data <- read.csv("train/HaitiPixels.csv")
@@ -42,6 +44,8 @@ head(train_data)
 
 </div>
 
+## Step 2: Feature Engineering
+
 ```{r}
 # Feature Engineering: color ratios
 train_data <- train_data %>%
@@ -65,7 +69,9 @@ head(train_data)
 - **Color_Purity: The dominant color's share of the total color**
 - **Brightness: Total illumination level across all color channels (Red + Green + Blue); higher values indicate brighter/lighter pixels while lower values indicate darker pixels, regardless of color**
 
-Reason: These variables allow us to explore how the relationships of the colors correlate to the classes instead of exploring colors independently of each other.
+These variables help us analyze how different color intensities work together to distinguish between classes, rather than looking at red, green, and blue values independently.
+
+## Step 3: Class Distribution Plot
 
 ```{r}
 #| fig.width: 10
@@ -87,7 +93,9 @@ ggplot(class_summary, aes(x = Class, y = n, fill = FillColor)) +
   labs(title = "Class Distribution", y = "Count", x = NULL)
 ```
 
+The training data contains 63,241 observations, with only 3.2% belonging to the Blue Tarp class that we aim to predict.
 
+## Step 4: Boxplot Distributions of Colors across all 5 Classes
 
 ```{r}
 #| fig.width: 12
@@ -114,6 +122,8 @@ blue_bxplt <- ggplot(train_data, aes(x = Class, y = Blue)) +
 red_bxplt + green_bxplt + blue_bxplt
 ```
 
+## Step 5: Specify Medians
+
 ```{r}
 # Medians
 median_table <- train_data %>%
@@ -130,7 +140,9 @@ kable(median_table, caption = "Median RGB Intensities by Class") %>%
 kable_styling(full_width = FALSE, position = "center")
 ```
 
-This chart below might not be necessary. Maybe something that could just be in the report.
+This table displays the median RGB values (represented by the center line in boxplots above) for each class.
+
+## Step 6: RGB Channel Histograms by Class
 
 ```{r}
 # Function to find the count of the most frequent color intensity value
@@ -183,6 +195,10 @@ rgb_dist(train_data, "Various Non-Tarp")
 rgb_dist(train_data, "Soil")
 ```
 
+These histograms provide a more detailed view of the color intensity distributions shown in the boxplots.
+
+## Step 7: Color Ratio Scatter Plot
+
 ```{r}
 # Calculate blue tarp statistics for decision boundaries
 blue_tarp_stats <- train_data %>%
@@ -216,16 +232,17 @@ color_ratio <- ggplot(train_data, aes(x = Blue_Red_Ratio, y = Blue_Green_Ratio))
 color_ratio +
   guides(color = guide_legend(override.aes = list(size = 2)))
 ```
+
 - **75% of blue tarp images have a Blue/Red ratio greater than 1.094237 (to the right of the vertical dashed line)**
 - **75% of blue tarp images have a Blue/Green ration greater than 1.025158 (above the horizontal dashed line)**
 
+This plot shows how different surface types from aerial photos cluster based on their color ratios - blue tarps appear in the upper-right because they have more blue color relative to red and green, while vegetation appears in the lower-left because it has less blue compared to other colors. The red dashed lines mark where 75% of blue tarp pixels fall above these thresholds, creating a conservative boundary for classification. Any pixel that falls above both dashed lines has stronger blue characteristics than most actual blue tarps in our data, making it very likely to be a blue tarp.
 
 > Page break. Above is training data. Below is holdout data.
 > 
 
-
-# Blue Tarp Holdout Data
-
+# Part 2: Holdout Data Pre-processing
+## Step 1: Blue Tarp Holdout Set
 ```{r}
 col_names <- c("ID", "X", "Y", "Map_X", "Map_Y", "Lat", "Lon", "B1", "B2", "B3")
 
@@ -242,8 +259,12 @@ holdout078_blue <- read.delim("holdout/orthovnir078_ROI_Blue_Tarps.txt",
                                skip = 8, header = FALSE, sep = "", col.names = col_names)
 ```
 
+```{r}
+holdout_bluedata <- rbind(holdout067_blue, holdout069_blue, holdout078_blue)
+holdout_bluedata
+```
 
-# Non-Blue Tarp Holdout Data
+## Non-Blue Tarp Holdout Data
 
 ```{r}
 # orthovnir057 NON-Blue Tarp data
@@ -264,7 +285,98 @@ holdout078_nonblue <- read.delim("holdout/orthovnir078_ROI_NON_Blue_Tarps.txt",
 ```
 
 ```{r}
-# Should be 3,991,823 and not 979,728. Missing almost 2 million rows. Right? Idk.
-tail(holdout078_nonblue)
+holdout_nonbluedata <- rbind(holdout057_nonblue, holdout067_nonblue, holdout069_nonblue, holdout078_nonblue)
+holdout_nonbluedata
+```
+
+## Combining Holdout sets and adding Binary Class Column
+
+```{r}
+# Combine both datasets with class labels
+holdout_data <- rbind(
+  holdout_bluedata %>% mutate(Class = "Blue Tarp"),
+  holdout_nonbluedata %>% mutate(Class = "Non Blue Tarp")
+)
+
+# Feature Engineering: B1, B2, B3 ratios
+holdout_data <- holdout_data %>%
+  mutate(
+    B3_B1_Ratio = B3 / B1,
+    B3_B2_Ratio = B3 / B2,
+    B2_B1_Ratio = B2 / B1,
+    B3_Dominance = B3 / (B1 + B2 + B3),  # B3's share of total
+    Band_Purity = pmax(B1, B2, B3) / (B1 + B2 + B3), # How pure is the dominant band
+    Brightness = B1 + B2 + B3
+  )
+
+holdout_data
+```
+
+```{r}
+#| fig.width: 11
+#| fig.height: 5
+# Filter for Blue Tarp class
+blue_tarp_data <- holdout_data %>% filter(Class == "Blue Tarp")
+
+# Find the count of the most frequent color intensity value for each band
+max_counts_holdout <- sapply(c("B1", "B2", "B3"), function(band) {
+  max(hist(blue_tarp_data[[band]], breaks = seq(0, 255, by = 5), plot = FALSE)$counts)
+})
+
+max_y <- max(max_counts_holdout) # Ensure alignment of axes
+
+b1_dist <- ggplot(blue_tarp_data, aes(x = B1)) +
+  geom_area(stat = "bin", binwidth = 6, fill = "red", alpha = 1) +
+  theme_minimal() +
+  labs(x = "B1 Channel Intensity", y = "Image Count") +
+  coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
+
+b2_dist <- ggplot(blue_tarp_data, aes(x = B2)) +
+  geom_area(stat = "bin", binwidth = 6, fill = "green", alpha = 1) +
+  theme_minimal() +
+  labs(x = "B2 Channel Intensity", y = "Image Count") +
+  coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
+
+b3_dist <- ggplot(blue_tarp_data, aes(x = B3)) +
+  geom_area(stat = "bin", binwidth = 6, fill = "blue", alpha = 1) +
+  theme_minimal() +
+  labs(x = "B3 Channel Intensity", y = "Image Count") +
+  coord_cartesian(xlim = c(0, 255), ylim = c(0, max_y))
+
+(b1_dist + b2_dist + b3_dist) +
+  plot_annotation(title = "Color Breakdown of Holdout Blue Tarp Images") +
+  theme(plot.title = element_text(size = 20, hjust = 0.5))
+```
+
+
+```{r}
+# Calculate blue tarp statistics for decision boundaries
+blue_tarp_stats_holdout <- holdout_data %>%
+  filter(Class == "Blue Tarp") %>%
+  summarise(
+    mean_b3b1 = mean(B3_B1_Ratio), # Average B3/B1 ratio across blue tarp images
+    mean_b3b2 = mean(B3_B2_Ratio), # Average B3/B2 ratio across blue tarp images
+    q25_b3b1 = quantile(B3_B1_Ratio, 0.25), # Bottom quartile of B3/B1 Ratio
+    q25_b3b2 = quantile(B3_B2_Ratio, 0.25) # Bottom quartile of B3/B2 Ratio
+  )
+
+# B3/B1 vs B3/B2 Ratio Scatter Plot
+band_ratio <- ggplot(holdout_data, aes(x = B3_B1_Ratio, y = B3_B2_Ratio)) +
+  geom_point(aes(color = Class), alpha = 0.6, size = 0.8) +
+  # Add potential decision boundaries
+  geom_vline(xintercept = blue_tarp_stats_holdout$q25_b3b1, linetype = "dashed", color = "red", alpha = 0.7) +
+  geom_hline(yintercept = blue_tarp_stats_holdout$q25_b3b2, linetype = "dashed", color = "red", alpha = 0.7) +
+  scale_color_manual(values = c("Blue Tarp" = "blue", 
+                               "Non Blue Tarp" = "orange")) +
+  theme_minimal() +
+  labs(title = "Potential Blue Tarp Decision Boundaries - Holdout Data",
+       subtitle = "Dashed lines show 25th percentile thresholds for blue tarps",
+       x = "B3/B1 Ratio", 
+       y = "B3/B2 Ratio") +
+  theme(legend.position = "right",
+        legend.title = element_blank())
+
+band_ratio +
+  guides(color = guide_legend(override.aes = list(size = 2)))
 ```
 
