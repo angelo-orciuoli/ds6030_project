@@ -1,7 +1,17 @@
 ---
 title: "DS6030 Project Part 1: Exploratory Data Analysis"
+author: "Angelo Orciuoli, Christina Land, Scott Tumperi, Tyler Hobbs"
 output: html_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  cache = TRUE,
+  cache.path = "cache/",
+  cache.lazy = FALSE,
+  fig.path = "figures/"
+)
+```
 
 ```{r}
 library(tidyverse)
@@ -236,7 +246,7 @@ color_ratio +
 - **75% of blue tarp images have a Blue/Red ratio greater than 1.094237 (to the right of the vertical dashed line)**
 - **75% of blue tarp images have a Blue/Green ration greater than 1.025158 (above the horizontal dashed line)**
 
-This plot shows how different surface types from aerial photos cluster based on their color ratios - blue tarps appear in the upper-right because they have more blue color relative to red and green, while vegetation appears in the lower-left because it has less blue compared to other colors. The red dashed lines mark where 75% of blue tarp pixels fall above these thresholds, creating a conservative boundary for classification. Any pixel that falls above both dashed lines has stronger blue characteristics than most actual blue tarps in our data, making it very likely to be a blue tarp.
+This plot shows how different surface types from aerial photos cluster based on their color ratios - blue tarps appear in the upper-right because they have more blue color relative to red and green, while vegetation appears in the lower-left because it has less blue compared to other colors. The red dashed lines mark where 75% of blue tarp observations fall above these thresholds, creating a conservative boundary for classification. Any pixel that falls above both dashed lines has stronger blue characteristics than most actual blue tarps in our data, making it very likely to be a blue tarp.
 
 > Page break. Above is training data. Below is holdout data.
 > 
@@ -348,6 +358,7 @@ b3_dist <- ggplot(blue_tarp_data, aes(x = B3)) +
   theme(plot.title = element_text(size = 20, hjust = 0.5))
 ```
 
+The holdout data seems to have a greater variance.
 
 ```{r}
 # Calculate blue tarp statistics for decision boundaries
@@ -380,3 +391,4 @@ band_ratio +
   guides(color = guide_legend(override.aes = list(size = 2)))
 ```
 
+Based on this graph, its clear that B1 = Red, B2 = Green, and B3 = Blue. The two ratios appear to be a slightly greater than the train data ratios, but the difference of them appears to be the same.
